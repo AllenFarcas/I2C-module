@@ -11,7 +11,16 @@ module fsm_master
    output reg  sda_select
    );
 
-   localparam IDLE = 'd1;
+   //State codification
+   localparam IDLE = 'd0;
+   localparam START = 'd1;
+   localparam SEND_SLAVE_ADDRESS = 'd2;
+   localparam ACK_RECEIVE = 'd3;
+   localparam WRITE = 'd4;
+   localparam READ = 'd5;
+   localparam SEND_ACK = 'd6;
+   localparam STOP = 'd7;
+   
 
    //Registrii de control
    localparam REG_READ = 8'10101010;
@@ -25,27 +34,39 @@ module fsm_master
    //Adresa Slave
    localparam SLAVE_ADDRESS = 7'b1011010;
 
-   reg [3:0]  current_state;
-   reg [3:0]  next_state;
+   reg [3:0]   current_state;
+   reg [3:0]   next_state;
 
-   reg 	      sp_enable_ff;
-   reg 	      sp_rst_ff;
-   reg 	      sp_start_stop_ff;
-   reg 	      sp_sda_out_ff;
-   reg 	      sp_ending_ff;
-   reg 	      sp_scl_out_ff;
-   reg 	      first_start_ff;
+   reg 	       sda_out_d;
    
-   reg 	      sp_enable_d;
-   reg 	      sp_rst_d;
-   reg 	      sp_start_stop_d;
-   reg 	      sp_sda_out_d;
-   reg 	      sp_ending_d;
-   reg 	      sp_scl_out_d;
-   reg 	      first_start_d;
+   reg 	       sp_enable_ff;
+   reg 	       sp_rst_ff;
+   reg 	       sp_start_stop_ff;
+   reg 	       sp_sda_out_ff;
+   reg 	       sp_scl_out_ff;
+   reg 	       first_start_ff;
+   reg 	       bit_count_ff; 
+   reg 	       send_slave_ff;
+   reg 	       sda_in_ff;
+   reg 	       ack_ff;
+   reg [7:0]   read_byte_ff;
    
    
-   wire       scl_intern;
+   reg 	       sp_enable_d;
+   reg 	       sp_rst_d;
+   reg 	       sp_start_stop_d;
+   reg 	       sp_sda_out_d;
+   reg 	       sp_scl_out_d;
+   reg 	       first_start_d;
+   reg 	       bit_count_d;
+   reg 	       send_slave_d;
+   reg 	       sda_in_d;
+   reg 	       ack_d;
+   reg [7:0]   read_byte_d;
+   
+   
+   wire        sp_ending;        
+   wire        scl_intern;
    
    //Instantiate modules
    start_stop_generator s_p
@@ -55,7 +76,7 @@ module fsm_master
       .rst_(sp_rst_ff),
       .start_stop(sp_start_stop_ff),
       .sda_out(sp_sda_out_ff),
-      .ending(sp_ending_ff),
+      .ending(sp_ending),
       .scl_out(sp_scl_out_ff)
       );
 
@@ -70,20 +91,20 @@ module fsm_master
    always @ (*)
      begin
 	case (current_state)
-
+	  //============================================================================================================
 	  IDLE :
 	    if(!fsm_select_)
 	      begin
 		 if(reset_register == REG_RESET) // if the control register has the reset command
 		   begin
 		      sp_enable_d = 1'd0; //disable start_stop_generator.v
-		      sp_rst_d = 1'd0; // activate reset from start_stop_generator.v
-		      
+		      sp_rst_d = 1'd0; // activate reset from start_stop_generator.v   
 		   end
 		 else
 		   begin
 		      sp_rst_d = 1'd1; //disable the reset, preparing to launch the start signal
-		      first_start_d = 1'd1 // this is the first start signal generated
+		      first_start_d = 1'd1; // this is the first start signal generated
+		      sp_start_stop_d = 1'd1;
 		      next_state = START; //send the start signal
 		   end // else: !if(reset_register == REG_RESET)
 	      end // if (!fsm_select_)
@@ -91,7 +112,7 @@ module fsm_master
 	      begin
 		 next_state = IDLE;
 	      end // else: !if(!fsm_select_)
-
+	  //============================================================================================================
 	  START :
 	    if(first_start_ff) // if this is the first start signal
 	      begin
@@ -102,15 +123,19 @@ module fsm_master
 	      end
 	    else // if this is not the first start signal
 	      begin
-		 sp_enable_d = 1'd1; // generate the start for the next operation
 		 if(control_reg == REG_READ)
 		   begin
+		      sda_select_d = 1'd1; //select sda_in for reading
+		      bit_count_d = 1'd0; // reset bit count
+		      ack_d = 1'd0; // reset the ack bit
 		      next_state = READ;
 		   end
 		 else
 		   begin
 		      if(control_reg == REG_WRITE)
 			begin
+			   sda_select_d = 1'd0; // select sda_out for writing
+			   bit_count_d = 1'd0; // reset bit count
 			   next_state = WRITE;
 			end
 		      else
@@ -119,23 +144,139 @@ module fsm_master
 			end
 		   end // else: !if(control_reg == REG_READ)
 	      end // else: !if(first_start_ff)
-
+	  //============================================================================================================
 	  SEND_SLAVE_ADDRESS :
 	    if(bit_count_ff == 3'd7)
 	      begin
-		 bit_count_d = 3'd0;
-		 next_state = ACK_RECEIVE;
-		 
+		 bit_count_d = 3'd0; // reset bit_count value
+		 sda_select_d = 1'd1; //selecteaza linia de sda_in pentru a primi ACK
+		 send_slave_d = 1'd1; // the ACK_RECEIVE state will know that slave address was sent
+		 sda_in_d = sda_in;
+		 next_state = ACK_RECEIVE; // asteapta un tact semnalul ACK
 	      end
 	    else
 	      begin
 		 bit_count_d = bit_count_ff + 1;
 		 sda_out_d = SLAVE_ADDRESS[bit_count_ff];
-		 next_state = SEND_SLAVE_ADDRESS;
-		 
+		 next_state = SEND_SLAVE_ADDRESS; 
 	      end
-	       
-	  endcase
+	  //============================================================================================================
+	  ACK_RECEIVE :
+	    if(send_slave_ff) // if the slave address was sent
+	      begin
+		 if(sda_in_ff == 1'b0) // if we have ACK
+		   begin
+		      sda_select_d = 1'd1;
+		      next_state = START;
+		   end
+		 else
+		   begin
+		      next_state = SEND_SLAVE_ADDRESS;
+		   end
+	      end // if (send_slave_ff)
+	    else
+	      begin
+		 if(write_op_ff) // if the last operation was writing
+		   begin
+		      if(sda_in_ff == 1'b0) // if we have ACK
+			begin
+			   sda_select_d = 1'd1; // the sda_in line selected
+			   sp_enable_d = 1'd1;
+			   sp_start_stop_d = 1'd0;
+			   next_state = STOP;
+			end
+		      else
+			begin
+			   next_state = WRITE; // if we don't have ACK, write again
+			end
+		   end // if (write_op_ff)
+		 else
+		   begin
+		      next_state = IDLE;
+		   end // else: !if(write_op_ff)
+	      end // else: !if(send_slave_ff)
+	  //============================================================================================================
+	  WRITE :
+	    if (bit_count_ff == 3'd7)
+	      begin
+		 sda_out_d = REG_WR1[bit_count_ff];
+		 write_op_d = 1'd1;
+		 send_slave_d = 1'd0;
+		 bit_count_d = 1'd0;
+		 next_state = ACK_RECEIVE;		 
+	      end
+	    else
+	      begin
+		 bit_count_d = bit_count_ff + 1;
+		 sda_out_d = REG_WR1[bit_count_ff];
+		 next_state = WRITE; 
+	      end
+	  //============================================================================================================
+	  READ : 
+ 	    if (bit_count_ff == 3'd7)
+	      begin
+		 read_byte_d[bit_count_ff] = sda_in;
+		 ack_d = read_byte_d[bit_count_ff] || ack_ff;
+		 sda_select_d = 1'd0; // select sda_out for writing
+		 next_state = SEND_ACK;
+	      end
+	    else
+	      begin
+		 bit_count_d = bit_count_ff + 1;
+		 read_byte_d[bit_count_ff] = sda_in;
+		 ack_d = byte_d[bit_count_ff] || ack_ff;
+		 next_state = READ;
+	      end
+	  //============================================================================================================
+	  SEND_ACK :
+	    if(ack_ff)
+	      begin
+		 sda_out_d = 1'd0;
+		 sda_select_d = 1'd0;
+		 sp_start_stop_d = 1'd0;
+		 next_state = STOP;
+	      end
+	    else
+	      begin
+		 sda_out_d = 1'd1;
+		 bit_count_d = 1'd0;
+		 ack_d = 1'd0;
+		 next_state = READ;
+	      end
+	  //============================================================================================================
+	  STOP :
+ 	    begin
+	       sp_enable_d = 1'd1;
+	       sp_start_stop_d = 1'd0;
+	       next_state = IDLE;
+	    end
+	  //============================================================================================================
+	  
+	endcase // case (current_state)
+
+     end // always @ (*)
+
+   always @ (posedge scl_intern, negedge rst_)
+     begin
+	if(!rst_)
+	  begin
+	     scl_out <= scl_intern;   
+	  end
+	else
+	  begin
+	     sp_enable_ff <= sp_enable_d;
+   	     sp_rst_ff <= sp_rst_d;
+   	     sp_start_stop_ff <= sp_start_stop_d;
+    	     sp_sda_out_ff <= sp_sda_out_d;
+    	     sp_scl_out_ff sp_scl_out_d;
+    	     first_start_ff <= first_start_d;
+    	     bit_count_ff <= bit_count_d; 
+    	     send_slave_ff <= send_slave_d;
+    	     sda_in_ff <= sda_in_d;
+    	     ack_ff <= ack_d;
+	     read_byte_ff <= read_byte_d;
+	     scl_out <= scl_intern;
+	     current_state <= next_state;     
+	  end
      end
-   
 endmodule
