@@ -14,8 +14,8 @@ module scl_generator
      begin
 	if(!rst_)
 	  begin
-	     scl_out <= 1'd1;
-	     cnt_ff <= 6'd0;
+	     scl_out_d <= 1'd1;
+	     cnt_d <= 6'd0;
 	  end
 	else
 	  begin
@@ -23,6 +23,11 @@ module scl_generator
 	       begin
 		  scl_out <= scl_out_d;
 		  cnt_ff <= cnt_d;
+	       end
+	     else
+	       begin
+		  scl_out <= 1'bz;
+		  cnt_d <= 6'd0;
 	       end
 	  end // else: !if(!rst_)
      end // always @ (posedge clk, negedge rst_)
@@ -32,7 +37,7 @@ module scl_generator
 	if(enable)
 	  begin
 	     cnt_d = cnt_ff + 1;
-	     if (cnt == 6'd49)
+	     if (cnt_ff == 6'd49)
 	       begin
 		  scl_out_d = ~scl_out;
 		  cnt_d = 6'd0;	  
