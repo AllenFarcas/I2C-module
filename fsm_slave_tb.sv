@@ -11,7 +11,7 @@ module fsm_slave_tb;
    reg tb_sda_in;
    reg tb_scl_in;
    reg tb_fsm_select_;
-   reg tb_write_read;
+   reg tb_sda_select;
    reg tb_sda_out;
 
    fsm_slave sclav
@@ -21,7 +21,7 @@ module fsm_slave_tb;
       .sda_in(tb_sda_in),
       .scl_in(tb_scl_in),
       .fsm_select_(tb_fsm_select_),
-      .write_read(tb_write_read),
+      .sda_select(tb_sda_select),
       .sda_out(tb_sda_out)
       );
 

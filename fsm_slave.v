@@ -5,8 +5,8 @@ module fsm_slave
    input      sda_in,
    input      scl_in,
    input      fsm_select_,
-   output reg write_read,
-   output reg sda_out
+   output reg sda_out,
+   output reg sda_select
    );
 
    localparam IDLE = 4'd0;
@@ -21,7 +21,8 @@ module fsm_slave
    localparam STOP = 4'd9;
    
    //Slave address
-   localparam SLAVE_ADDRESS = 7'b1011010;
+    localparam SLAVE_ADDRESS = 7'b1011010; //pentru primul test cu READ
+   //localparam SLAVE_ADDRESS = 7'b1011010; // pentru al doilea test cu WRITE 
 
    //Write register
    localparam WRITE_REG = 8'b00101010;
@@ -32,7 +33,7 @@ module fsm_slave
 
    reg 	      sda_out_d;
    reg 	      sda_select_d;
-   reg 	      write_read_d;
+   reg 	      sda_in_d;
 
    reg 	      select_start_d;
    reg 	      select_stop_d;
@@ -41,10 +42,9 @@ module fsm_slave
    reg [7:0]  first_bits_d;
    reg [7:0]  byte_d;
    
-   
-   
    wire       start_bit;
    wire       stop_bit;
+   
    reg 	      select_start_ff;
    reg 	      select_stop_ff;
    reg 	      ack_ff;
@@ -82,7 +82,6 @@ module fsm_slave
 		 stop_bit_d = 1'd0;
                  start_bit_d = 1'd0;
 		 select_start_d = 1'd1;
-		 ack_d = 1'd0;
 		 bit_count_d = 3'd0;
 		 byte_d = 8'dz;
 		 first_bits_d = 8'dz;
@@ -98,6 +97,7 @@ module fsm_slave
 	      begin
 		 ack_d = 1'd0;
 		 select_start_d = 1'd0;
+		 sda_select_d = 1'd1;
 		 next_state = READ_FIRST;
 	      end
 	    else
@@ -110,8 +110,8 @@ module fsm_slave
 	      begin
 		 first_bits_d[bit_count_ff] = sda_in;
 		 ack_d = first_bits_d[bit_count_ff] || ack_ff;
-		 write_read_d = 1'd0;
 		 bit_count_d = 1'd0;
+		 sda_select_d = 1'd0;
 		 next_state = ACKNOWLEDGE;
 	      end
 	    else
@@ -133,7 +133,7 @@ module fsm_slave
 	    else
 	      begin
 		 sda_out_d = 1'd1;
-		 write_read_d = 1'd1;
+		 sda_select_d = 1'd1;
 		 next_state = IDLE;
 	      end // else: !if(ack == 1'd1)
 	  
@@ -142,20 +142,20 @@ module fsm_slave
 	      begin
 		 if(first_bits_ff[0])
 		   begin
-		      write_read_d = 1'd1;
+		      sda_select_d = 1'd1;
 		      bit_count_d = 1'd0;
 		      next_state = READ;
 		   end
 		 else
 		   begin
-		      write_read_d = 1'd0;
+		      sda_select_d = 1'd0;
 		      bit_count_d = 1'd0;
 		      next_state = WRITE;
 		   end
 	      end // if (first_bits_ff[7:1] == SLAVE_ADDRESS)
 	    else
 	      begin
-		 write_read_d = 1'd1;
+		 sda_select_d = 1'd1;
 		 bit_count_d = 1'd0;
 		 next_state = IDLE;
 	      end // else: !if(first_bits_ff[7:1] == SLAVE_ADDRESS)
@@ -165,7 +165,7 @@ module fsm_slave
 	      begin
 		 ack_d = byte_d[bit_count_ff] || ack_ff;
 		 byte_d[bit_count_ff] = sda_in;
-		 write_read_d = 1'd0;
+		 sda_select_d = 1'd0;
 		 bit_count_d = 1'd0;
 		 next_state = ACK_READ;
 	      end
@@ -187,7 +187,7 @@ module fsm_slave
 	    else
 	      begin
 		 sda_out_d = 1'd1;
-		 write_read_d = 1'd1;
+		 sda_select_d = 1'd1;
 		 ack_d = 1'd0;
 		 next_state = IDLE;
 	      end // else: !if(ack_ff == 1'd1)
@@ -195,7 +195,8 @@ module fsm_slave
 	  WRITE :
 	    if (bit_count_ff == 3'd7)
 	      begin
-		 write_read_d = 1'd1;
+		 sda_out_d = WRITE_REG[bit_count_ff];
+		 sda_select_d = 1'd1;
 		 bit_count_d = 1'd0;
 		 next_state = ACK_CHECK;
 	      end
@@ -207,9 +208,9 @@ module fsm_slave
 	      end // else: !if(bit_count_ff == 1'd7)
 
 	  ACK_CHECK :
-	    if(sda_in)
+	    if(sda_in_d)
 	      begin
-		 write_read_d = 1'd0;
+		 sda_select_d = 1'd0;
 		 next_state = WRITE;
 	      end
 	    else
@@ -238,7 +239,6 @@ module fsm_slave
 	if(!rst_)
 	  begin
 	     bit_count_d <= 3'd0;
-	     write_read_d <= 1'd1;
 	     first_bits_d <= 8'bz;
 	     byte_d <= 8'bz;
 	     select_start_d <= 1'd0;
@@ -249,13 +249,14 @@ module fsm_slave
 	else
 	  begin
 	     bit_count_ff <= bit_count_d;
-	     write_read <= write_read_d;
 	     select_start_ff <= select_start_d;
 	     select_stop_ff <= select_stop_d;
    	     first_bits_ff <= first_bits_d;
 	     byte_ff <= byte_d;
 	     ack_ff <= ack_d;
 	     sda_out <= sda_out_d;
+	     sda_select <= sda_select_d;
+	     sda_in_d <= sda_in;
 	     current_state <= next_state;
 	  end
      end // always @ (posedge scl_in, negedge rst_)
