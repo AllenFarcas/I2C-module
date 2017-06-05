@@ -1,4 +1,4 @@
-module start_generator
+module start_stop_generator
   (
    input      enable,
    input      scl_in,
@@ -26,7 +26,7 @@ module start_generator
 	case(current_state)
 
 	  IDLE :
-	    if(enable)
+	    if(enable & !ending)
 	      begin
 		 if(start_stop)
 		   begin
@@ -45,11 +45,12 @@ module start_generator
 	      end
 	    else
 	      begin
+		 ending_d = 1'd0;
 		 next_state = IDLE;
 	      end
 
 	  START :
-	    if(enable)
+	    if(enable & !ending)
 	      begin
 		 sda_out_d = 1'd0;
 		 scl_out_d = 1'd1;
@@ -57,11 +58,12 @@ module start_generator
 	      end
 	    else
 	      begin
+		 ending_d = 1'd0;
 		 next_state = IDLE;
 	      end
 
 	  STOP :
-	    if(enable)
+	    if(enable & !ending)
 	      begin
 		 sda_out_d = 1'd1;
 		 scl_out_d = 1'd1;
@@ -69,6 +71,7 @@ module start_generator
 	      end
 	    else
 	      begin
+		 ending_d = 1'd0;
 		 next_state = IDLE;
 	      end
 	  

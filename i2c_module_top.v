@@ -1,10 +1,12 @@
 module i2c_module_top
   (
-   inout sda,
-   inout scl,
-   input clk,
-   input rst_,
-   input select_
+   inout       sda,
+   inout       scl,
+   input       clk,
+   input       rst_,
+   input       select_,
+   input [7:0] rst_reg,
+   input [7:0] cntrl_reg
    );
 
    wire  sda_in;
@@ -43,7 +45,9 @@ module i2c_module_top
       .sda_in(sda_in),
       .scl_out(scl_out),
       .sda_select(sda_select_m),
-      .fsm_select_(!select_)
+      .fsm_select_(!select_),
+      .reset_register(rst_reg),
+      .control_reg(cntrl_reg)
       );
    
    fsm_slave slave

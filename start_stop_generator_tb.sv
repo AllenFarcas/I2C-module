@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module start_generator_tb;
+module start_stop_generator_tb;
 
    
    // define system frequency in MHz
@@ -15,7 +15,7 @@ module start_generator_tb;
    reg tb_ending;
    reg tb_start_stop;
 
-   start_generator start
+   start_stop_generator s_p
      (
       .enable(tb_enable),
       .scl_in(tb_scl_in),
@@ -36,12 +36,13 @@ module start_generator_tb;
      begin
 	tb_start_stop = 1'd1;
 	#(`PER*120) tb_start_stop = 1'd0;
+	#(`PER*140) tb_start_stop = 1'd1;
      end
    
    initial
      begin
 	tb_rst_ = 1'd0;
-	#(`PER*5) tb_rst_ = 1'd1;
+	#(`PER*55) tb_rst_ = 1'd1;
 	#(`PER*100) tb_rst_ = 1'd0;
 	#(`PER*50) tb_rst_ = 1'd1;
      end

@@ -260,7 +260,9 @@ module fsm_master
      begin
 	if(!rst_)
 	  begin
-	     scl_out <= scl_intern;   
+	     scl_out <= scl_intern;
+	     
+	     current_state <= IDLE;	     
 	  end
 	else
 	  begin
